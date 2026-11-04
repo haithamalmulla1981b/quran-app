@@ -28,43 +28,16 @@ class _ReaderScreenState extends State<ReaderScreen> {
   int? _followed;
   int? _flash;
   Timer? _saveTimer;
-  late final List<List<int>> _chunks = _buildChunks(); // page view: ayah numbers per paragraph
-  late final List<int> _chunkOf = _buildChunkIndex(); // ayah -> list index
   final Map<int, TapGestureRecognizer> _taps = {};
   final _viewKey = GlobalKey(), _downloadKey = GlobalKey(), _fontKey = GlobalKey();
   final _bodyKey = GlobalKey(), _playKey = GlobalKey(), _repeatKey = GlobalKey();
 
-  /// Splits the surah into paragraphs of roughly equal length so the list
-  /// can scroll to the ayah being recited.
-  List<List<int>> _buildChunks() {
-    final out = <List<int>>[];
-    var cur = <int>[];
-    var len = 0;
-    for (var a = 1; a <= _view.ayahs.length; a++) {
-      cur.add(a);
-      len += _view.ayahs[a - 1].length;
-      if (len >= 260) {
-        out.add(cur);
-        cur = <int>[];
-        len = 0;
-      }
-    }
-    if (cur.isNotEmpty) out.add(cur);
-    return out;
-  }
-
-  List<int> _buildChunkIndex() {
-    final idx = List<int>.filled(_view.ayahs.length + 1, 0);
-    for (var c = 0; c < _chunks.length; c++) {
-      for (final a in _chunks[c]) {
-        idx[a] = c + 1; // list index 0 is the header
-      }
-    }
-    return idx;
-  }
-
-  /// List index that holds this ayah in the current layout.
-  int _indexOf(int a) => app.pageView ? _chunkOf[a] : a;
+  // Page view: one continuous text; each ayah's rosette carries a key so the
+  // page can scroll to the ayah being recited.
+  final _pageScroll = ScrollController();
+  final Map<int, GlobalKey> _marks = {};
+  GlobalKey _mark(int a) => _marks.putIfAbsent(a, () => GlobalKey());
+  Timer? _pageSaveTimer;
 
   int get s => widget.surah;
 
@@ -75,6 +48,12 @@ class _ReaderScreenState extends State<ReaderScreen> {
     _positions.itemPositions.addListener(_onScroll);
     if (!app.guideReaderSeen) {
       Future.delayed(const Duration(milliseconds: 800), _showGuide);
+    }
+    if (app.pageView && widget.initialAyah != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final ctx = _marks[widget.initialAyah!]?.currentContext;
+        if (ctx != null) Scrollable.ensureVisible(ctx, alignment: 0.35);
+      });
     }
     if (widget.initialAyah != null) {
       _flash = widget.initialAyah;
@@ -87,6 +66,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
   @override
   void dispose() {
     _saveTimer?.cancel();
+    _pageSaveTimer?.cancel();
+    _pageScroll.dispose();
     app.audio.removeListener(_followAudio);
     _positions.itemPositions.removeListener(_onScroll);
     for (final t in _taps.values) {
@@ -116,9 +97,13 @@ class _ReaderScreenState extends State<ReaderScreen> {
     final a = app.audio;
     if (a.surah != s || a.currentAyah == null || a.currentAyah == _followed) return;
     _followed = a.currentAyah;
-    if (!_scroll.isAttached) return;
     if (DateTime.now().difference(_userScrolledAt) < const Duration(seconds: 5)) return;
-    final index = _indexOf(a.currentAyah!); // index 0 is the surah header
+    if (app.pageView) {
+      _followPage(a.currentAyah!);
+      return;
+    }
+    if (!_scroll.isAttached) return;
+    final index = a.currentAyah!; // index 0 is the surah header
     for (final p in _positions.itemPositions.value) {
       if (p.index != index) continue;
       // Already comfortably visible: leave the page still.
@@ -134,6 +119,35 @@ class _ReaderScreenState extends State<ReaderScreen> {
     );
   }
 
+  /// Page view: scroll only when the recited ayah's marker leaves the
+  /// comfortable reading band of the screen.
+  void _followPage(int ayah) {
+    final ctx = _marks[ayah]?.currentContext;
+    final box = ctx?.findRenderObject();
+    if (ctx == null || box is! RenderBox || !box.attached) return;
+    final y = box.localToGlobal(Offset.zero).dy;
+    final h = MediaQuery.of(context).size.height;
+    if (y > h * 0.2 && y < h * 0.72) return;
+    Scrollable.ensureVisible(ctx,
+        alignment: 0.45, duration: const Duration(milliseconds: 600), curve: Curves.easeOutCubic);
+  }
+
+  /// Page view: remembers the first ayah whose marker is below the top bar.
+  void _savePagePosition() {
+    _pageSaveTimer?.cancel();
+    _pageSaveTimer = Timer(const Duration(milliseconds: 900), () {
+      if (!mounted) return;
+      final top = MediaQuery.of(context).padding.top + kToolbarHeight + 8;
+      for (var a = 1; a <= _view.ayahs.length; a++) {
+        final box = _marks[a]?.currentContext?.findRenderObject();
+        if (box is RenderBox && box.attached && box.localToGlobal(Offset.zero).dy > top) {
+          app.setLastRead(s, a);
+          return;
+        }
+      }
+    });
+  }
+
   bool _onUserScroll(UserScrollNotification n) {
     if (n.direction != ScrollDirection.idle) _userScrolledAt = DateTime.now();
     return false;
@@ -146,7 +160,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
       final visible = _positions.itemPositions.value.where((p) => p.itemTrailingEdge > 0.1);
       if (visible.isEmpty || !mounted) return;
       final first = visible.map((p) => p.index).reduce((x, y) => x < y ? x : y);
-      final ayah = first < 1 ? 1 : (app.pageView ? _chunks[first - 1].first : first);
+      final ayah = first < 1 ? 1 : first;
       app.setLastRead(s, ayah);
     });
   }
@@ -246,16 +260,26 @@ class _ReaderScreenState extends State<ReaderScreen> {
         listenable: Listenable.merge([app, app.audio]),
         builder: (context, _) => NotificationListener<UserScrollNotification>(
           onNotification: _onUserScroll,
-          child: ScrollablePositionedList.builder(
+          child: app.pageView
+              ? NotificationListener<ScrollEndNotification>(
+                  onNotification: (_) {
+                    _savePagePosition();
+                    return false;
+                  },
+                  child: SingleChildScrollView(
+                    controller: _pageScroll,
+                    padding: const EdgeInsets.only(bottom: 24),
+                    child: _page(context),
+                  ),
+                )
+              : ScrollablePositionedList.builder(
           itemScrollController: _scroll,
           itemPositionsListener: _positions,
-          initialScrollIndex: widget.initialAyah == null ? 0 : _indexOf(widget.initialAyah!),
+          initialScrollIndex: widget.initialAyah ?? 0,
           initialAlignment: widget.initialAyah != null ? 0.1 : 0,
           padding: const EdgeInsets.only(bottom: 24),
-          itemCount: (app.pageView ? _chunks.length : _view.ayahs.length) + 1,
-          itemBuilder: (context, i) => i == 0
-              ? _header(context)
-              : (app.pageView ? _paragraph(context, i - 1) : _ayah(context, i)),
+          itemCount: _view.ayahs.length + 1,
+          itemBuilder: (context, i) => i == 0 ? _header(context) : _ayah(context, i),
           ),
         ),
       ),
@@ -267,7 +291,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
     final p = paletteOf(context);
     return FrameSlice(
       first: true,
-      last: !app.pageView,
+      last: true,
       child: Padding(
         padding: const EdgeInsets.only(bottom: 4),
         child: Column(children: [
@@ -283,37 +307,52 @@ class _ReaderScreenState extends State<ReaderScreen> {
     );
   }
 
-  /// Page view: ayahs flow together; the recited ayah is highlighted in place.
-  Widget _paragraph(BuildContext context, int c) {
+  /// Page view: the whole surah as one continuous, justified text inside the
+  /// illuminated frame. The recited ayah is highlighted in place.
+  Widget? _pageCache;
+  String _pageSig = '';
+
+  Widget _page(BuildContext context) {
     final p = paletteOf(context);
-    final last = c == _chunks.length - 1;
+    // Rebuild the long text only when something visible changed.
+    final cur = app.audio.surah == s ? app.audio.currentAyah : null;
+    final sig = '$cur|$_flash|${app.fontSize}|${app.dark}|${app.bookmarks.length}|${app.bookmarks.join(',')}';
+    if (_pageCache != null && sig == _pageSig) return _pageCache!;
+    _pageSig = sig;
     final base = quranStyle(app.fontSize, p.ink);
     final spans = <InlineSpan>[];
-    for (final a in _chunks[c]) {
+    for (var a = 1; a <= _view.ayahs.length; a++) {
       final playing = app.audio.surah == s && app.audio.currentAyah == a;
-      final hl = playing || _flash == a;
-      final bg = hl ? p.highlight : null;
+      final bg = playing || _flash == a ? p.highlight : null;
       final tap = _taps.putIfAbsent(a, () => TapGestureRecognizer()..onTap = () => _showAyahActions(a));
-      spans.add(TextSpan(
-        text: _view.ayahs[a - 1],
-        style: base.copyWith(backgroundColor: bg),
-        recognizer: tap,
-      ));
+      spans.add(TextSpan(text: _view.ayahs[a - 1], style: base.copyWith(backgroundColor: bg), recognizer: tap));
+      final ayah = a;
       spans.add(WidgetSpan(
         alignment: PlaceholderAlignment.middle,
         child: GestureDetector(
-          onTap: () => _showAyahActions(a),
+          key: _mark(ayah),
+          onTap: () => _showAyahActions(ayah),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Rosette(a, size: app.fontSize * 1.1, active: playing || app.isBookmarked(s, a)),
+            child: Rosette(ayah, size: app.fontSize * 1.1, active: playing || app.isBookmarked(s, ayah)),
           ),
         ),
       ));
       spans.add(TextSpan(text: ' ', style: base));
     }
-    return FrameSlice(
-      last: last,
-      child: Text.rich(TextSpan(children: spans), textAlign: TextAlign.justify),
+    return _pageCache = FrameSlice(
+      first: true,
+      last: true,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        SurahCartouche(s),
+        if (_view.basmala != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(_view.basmala!, textAlign: TextAlign.center, style: quranStyle(app.fontSize * 0.95, p.ink)),
+          ),
+        const SizedBox(height: 6),
+        Text.rich(TextSpan(children: spans), textAlign: TextAlign.justify),
+      ]),
     );
   }
 

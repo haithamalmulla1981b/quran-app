@@ -8,11 +8,17 @@ import 'app_state.dart';
 import 'home_screen.dart';
 import 'theme.dart';
 
-// Al-Ahzab 33:23 (opening words), exactly as in the Tanzil text.
-const _ayah = 'مِّنَ ٱلْمُؤْمِنِينَ '
-    'رِجَالٌ صَدَقُوا۟ مَا '
-    'عَـٰهَدُوا۟ ٱللَّهَ '
-    'عَلَيْهِ';
+// Al-Ahzab 33:23, exactly as in the Tanzil text.
+const _ayah = '\u0645\u0651\u0650\u0646\u064e \u0671\u0644\u0652\u0645\u064f\u0624\u0652\u0645\u0650\u0646\u065'
+    '0\u064a\u0646\u064e \u0631\u0650\u062c\u064e\u0627\u0644\u064c \u0635\u064e\u062f\u064e\u0642\u0'
+    '64f\u0648\u0627\u06df \u0645\u064e\u0627 \u0639\u064e\u0640\u0670\u0647\u064e\u062f\u064f\u0648\'
+    'u0627\u06df \u0671\u0644\u0644\u0651\u064e\u0647\u064e \u0639\u064e\u0644\u064e\u064a\u0652\u064'
+    '7\u0650 \u06d6 \u0641\u064e\u0645\u0650\u0646\u0652\u0647\u064f\u0645 \u0645\u0651\u064e\u0646 \'
+    'u0642\u064e\u0636\u064e\u0649\u0670 \u0646\u064e\u062d\u0652\u0628\u064e\u0647\u064f\u06e5 \u064'
+    '8\u064e\u0645\u0650\u0646\u0652\u0647\u064f\u0645 \u0645\u0651\u064e\u0646 \u064a\u064e\u0646\u0'
+    '62a\u064e\u0638\u0650\u0631\u064f \u06d6 \u0648\u064e\u0645\u064e\u0627 \u0628\u064e\u062f\u0651'
+    '\u064e\u0644\u064f\u0648\u0627\u06df \u062a\u064e\u0628\u0652\u062f\u0650\u064a\u0644\u064b\u062'
+    '7';
 
 /// Animated intro: star, title, then the ayah typed letter by letter.
 class IntroScreen extends StatefulWidget {
@@ -47,7 +53,7 @@ class _IntroScreenState extends State<IntroScreen> with TickerProviderStateMixin
   }
 
   void _startTyping() {
-    _timers.add(Timer.periodic(const Duration(milliseconds: 85), (t) {
+    _timers.add(Timer.periodic(const Duration(milliseconds: 60), (t) {
       if (!mounted) return;
       if (_typed >= _letters.length) {
         t.cancel();
@@ -109,7 +115,7 @@ class _IntroScreenState extends State<IntroScreen> with TickerProviderStateMixin
                         scale: 0.4 + 0.6 * star.value,
                         child: Opacity(
                           opacity: star.value.clamp(0.0, 1.0),
-                          child: const SizedBox(width: 140, height: 140, child: CustomPaint(painter: _StarPainter())),
+                          child: const SizedBox(width: 120, height: 120, child: CustomPaint(painter: _StarPainter())),
                         ),
                       ),
                     ),
@@ -133,14 +139,15 @@ class _IntroScreenState extends State<IntroScreen> with TickerProviderStateMixin
                   const SizedBox(height: 22),
                   // Fixed height so nothing moves while the ayah is typed.
                   SizedBox(
-                    height: 110,
+                    height: 200,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 22),
                       child: Text.rich(
                         TextSpan(children: [
                           TextSpan(
                             text: _letters.take(_typed).join(),
-                            style: quranStyle(23, const Color(0xFFFBF6E9)),
+                            // Single-colour font so every mark shows in white.
+                            style: GoogleFonts.amiri(fontSize: 22, height: 1.9, color: Colors.white),
                           ),
                           if (_typed > 0 || _c.isCompleted)
                             WidgetSpan(
