@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'app_state.dart';
 import 'coach_marks.dart';
+import 'hijri_strip.dart';
 import 'player_bar.dart';
 import 'quran_data.dart';
 import 'reader_screen.dart';
@@ -113,6 +114,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             if (_query.trim().isEmpty) ...[
+              const HijriStrip(),
               TabBar(
                 key: _tabsKey,
                 labelColor: p.accent,

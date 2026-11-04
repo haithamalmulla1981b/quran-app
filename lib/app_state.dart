@@ -15,6 +15,7 @@ class AppState extends ChangeNotifier {
   bool pageView = true; // continuous Mushaf-style text
   bool guideHomeSeen = false;
   bool guideReaderSeen = false;
+  int hijriAdjust = 0; // days, -2..+2, to match local moon sighting
   List<String> bookmarks = []; // "s:a"
   String? lastRead; // "s:a"
 
@@ -26,6 +27,7 @@ class AppState extends ChangeNotifier {
     pageView = _prefs.getBool('pageView') ?? true;
     guideHomeSeen = _prefs.getBool('guideHome') ?? false;
     guideReaderSeen = _prefs.getBool('guideReader') ?? false;
+    hijriAdjust = _prefs.getInt('hijriAdjust') ?? 0;
     bookmarks = _prefs.getStringList('bookmarks') ?? [];
     lastRead = _prefs.getString('lastRead');
     final rid = _prefs.getString('reciter');
@@ -56,6 +58,12 @@ class AppState extends ChangeNotifier {
     guideReaderSeen = false;
     _prefs.setBool('guideHome', false);
     _prefs.setBool('guideReader', false);
+  }
+
+  void setHijriAdjust(int v) {
+    hijriAdjust = v.clamp(-2, 2);
+    _prefs.setInt('hijriAdjust', hijriAdjust);
+    notifyListeners();
   }
 
   void togglePageView() {

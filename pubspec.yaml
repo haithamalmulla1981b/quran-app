@@ -16,6 +16,7 @@ dependencies:
   http: ^1.2.2
   google_fonts: ^6.2.1
   scrollable_positioned_list: ^0.3.8
+  hijri: '>=2.0.0 <4.0.0'
 
 flutter:
   uses-material-design: true

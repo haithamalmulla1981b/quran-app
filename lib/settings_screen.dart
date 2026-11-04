@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'app_state.dart';
 import 'audio_controller.dart';
+import 'hijri_strip.dart';
+import 'quran_data.dart';
 import 'theme.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -83,6 +85,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         textAlign: TextAlign.center, style: quranStyle(app.fontSize, p.ink)),
                   ),
                 ]),
+              ),
+              Padding(padding: const EdgeInsets.fromLTRB(20, 16, 20, 4), child: Text('التاريخ الهجري', style: head)),
+              PageCard(
+                child: ListTile(
+                  title: const Text('تعديل التاريخ الهجري', style: TextStyle(fontSize: 18)),
+                  subtitle: Text(hijriDateText(DateTime.now(), app.hijriAdjust)),
+                  trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                    IconButton(
+                      onPressed: app.hijriAdjust < 2 ? () => app.setHijriAdjust(app.hijriAdjust + 1) : null,
+                      icon: const Icon(Icons.add_circle_outline_rounded),
+                    ),
+                    Text(app.hijriAdjust == 0
+                        ? '٠'
+                        : '${app.hijriAdjust > 0 ? '+' : '−'}${arNum(app.hijriAdjust.abs())}',
+                        style: const TextStyle(fontSize: 18)),
+                    IconButton(
+                      onPressed: app.hijriAdjust > -2 ? () => app.setHijriAdjust(app.hijriAdjust - 1) : null,
+                      icon: const Icon(Icons.remove_circle_outline_rounded),
+                    ),
+                  ]),
+                ),
               ),
               Padding(padding: const EdgeInsets.fromLTRB(20, 16, 20, 4), child: Text('التخزين', style: head)),
               PageCard(
