@@ -30,12 +30,7 @@ jobs:
           if [ ! -d android ]; then
             flutter create --platforms=android --org com.hmalmulla --project-name quran_app .
             rm -rf test
-            M=android/app/src/main/AndroidManifest.xml
-            # Internet for streaming audio and fonts; local cleartext for the audio cache proxy
-            sed -i '0,/<application/s|<application|<uses-permission android:name="android.permission.INTERNET"/>\n    <application|' "$M"
-            sed -i 's|android:label="quran_app"|android:label="القرآن الكريم" android:usesCleartextTraffic="true"|' "$M"
-            grep -q 'permission.INTERNET' "$M"
-            grep -q 'usesCleartextTraffic' "$M"
+            python3 tool/patch_android.py
           fi
 
       - run: flutter pub get
