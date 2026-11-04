@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show ScrollDirection;
+import 'package:flutter/rendering.dart' show RenderParagraph, ScrollDirection;
 import 'package:flutter/services.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
@@ -35,8 +35,9 @@ class _ReaderScreenState extends State<ReaderScreen> {
   // Page view: one continuous text; each ayah's rosette carries a key so the
   // page can scroll to the ayah being recited.
   final _pageScroll = ScrollController();
-  final Map<int, GlobalKey> _marks = {};
-  GlobalKey _mark(int a) => _marks.putIfAbsent(a, () => GlobalKey());
+  final _paraKey = GlobalKey();
+  final List<int> _ayahStart = []; // text offset where each ayah starts (index a-1)
+  final List<int> _ayahEnd = []; // text offset just after each ayah's end marker
   Timer? _pageSaveTimer;
 
   int get s => widget.surah;
@@ -50,10 +51,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
       Future.delayed(const Duration(milliseconds: 800), _showGuide);
     }
     if (app.pageView && widget.initialAyah != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        final ctx = _marks[widget.initialAyah!]?.currentContext;
-        if (ctx != null) Scrollable.ensureVisible(ctx, alignment: 0.35);
-      });
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollPageTo(widget.initialAyah!, 0.35, animate: false));
     }
     if (widget.initialAyah != null) {
       _flash = widget.initialAyah;
@@ -122,14 +120,34 @@ class _ReaderScreenState extends State<ReaderScreen> {
   /// Page view: scroll only when the recited ayah's marker leaves the
   /// comfortable reading band of the screen.
   void _followPage(int ayah) {
-    final ctx = _marks[ayah]?.currentContext;
-    final box = ctx?.findRenderObject();
-    if (ctx == null || box is! RenderBox || !box.attached) return;
-    final y = box.localToGlobal(Offset.zero).dy;
+    final y = _ayahEndY(ayah);
+    if (y == null) return;
     final h = MediaQuery.of(context).size.height;
     if (y > h * 0.2 && y < h * 0.72) return;
-    Scrollable.ensureVisible(ctx,
-        alignment: 0.45, duration: const Duration(milliseconds: 600), curve: Curves.easeOutCubic);
+    _scrollPageTo(ayah, 0.45);
+  }
+
+  /// Screen y of the line holding the ayah's end marker (page view).
+  double? _ayahEndY(int ayah) {
+    final para = _paraKey.currentContext?.findRenderObject();
+    if (para is! RenderParagraph || !para.attached || ayah > _ayahEnd.length) return null;
+    final boxes = para.getBoxesForSelection(
+        TextSelection(baseOffset: _ayahEnd[ayah - 1] - 1, extentOffset: _ayahEnd[ayah - 1]));
+    if (boxes.isEmpty) return null;
+    return para.localToGlobal(Offset(0, boxes.last.top)).dy;
+  }
+
+  void _scrollPageTo(int ayah, double alignment, {bool animate = true}) {
+    final y = _ayahEndY(ayah);
+    if (y == null || !_pageScroll.hasClients) return;
+    final h = MediaQuery.of(context).size.height;
+    final pos = _pageScroll.position;
+    final target = (pos.pixels + y - h * alignment).clamp(pos.minScrollExtent, pos.maxScrollExtent);
+    if (animate) {
+      _pageScroll.animateTo(target, duration: const Duration(milliseconds: 600), curve: Curves.easeOutCubic);
+    } else {
+      _pageScroll.jumpTo(target);
+    }
   }
 
   /// Page view: remembers the first ayah whose marker is below the top bar.
@@ -139,8 +157,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
       if (!mounted) return;
       final top = MediaQuery.of(context).padding.top + kToolbarHeight + 8;
       for (var a = 1; a <= _view.ayahs.length; a++) {
-        final box = _marks[a]?.currentContext?.findRenderObject();
-        if (box is RenderBox && box.attached && box.localToGlobal(Offset.zero).dy > top) {
+        final y = _ayahEndY(a);
+        if (y != null && y > top) {
           app.setLastRead(s, a);
           return;
         }
@@ -320,25 +338,26 @@ class _ReaderScreenState extends State<ReaderScreen> {
     if (_pageCache != null && sig == _pageSig) return _pageCache!;
     _pageSig = sig;
     final base = quranStyle(app.fontSize, p.ink);
+    // Pure text (no embedded widgets) so lines wrap and justify naturally.
+    // Each ayah ends with the font's ornamental marker: U+06DD + its number.
     final spans = <InlineSpan>[];
+    _ayahStart.clear();
+    _ayahEnd.clear();
+    var offset = 0;
     for (var a = 1; a <= _view.ayahs.length; a++) {
       final playing = app.audio.surah == s && app.audio.currentAyah == a;
       final bg = playing || _flash == a ? p.highlight : null;
       final tap = _taps.putIfAbsent(a, () => TapGestureRecognizer()..onTap = () => _showAyahActions(a));
-      spans.add(TextSpan(text: _view.ayahs[a - 1], style: base.copyWith(backgroundColor: bg), recognizer: tap));
-      final ayah = a;
-      spans.add(WidgetSpan(
-        alignment: PlaceholderAlignment.middle,
-        child: GestureDetector(
-          key: _mark(ayah),
-          onTap: () => _showAyahActions(ayah),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Rosette(ayah, size: app.fontSize * 1.1, active: playing || app.isBookmarked(s, ayah)),
-          ),
-        ),
-      ));
+      final text = _view.ayahs[a - 1];
+      final marker = '\u00A0\u06DD${arNum(a)}';
+      final markColor = playing || app.isBookmarked(s, a) ? kTurquoise : kGold;
+      _ayahStart.add(offset);
+      spans.add(TextSpan(text: text, style: base.copyWith(backgroundColor: bg), recognizer: tap));
+      spans.add(TextSpan(text: marker, style: base.copyWith(color: markColor, backgroundColor: bg), recognizer: tap));
+      offset += text.length + marker.length;
+      _ayahEnd.add(offset);
       spans.add(TextSpan(text: ' ', style: base));
+      offset += 1;
     }
     return _pageCache = FrameSlice(
       first: true,
@@ -351,7 +370,13 @@ class _ReaderScreenState extends State<ReaderScreen> {
             child: Text(_view.basmala!, textAlign: TextAlign.center, style: quranStyle(app.fontSize * 0.95, p.ink)),
           ),
         const SizedBox(height: 6),
-        Text.rich(TextSpan(children: spans), textAlign: TextAlign.justify),
+        RichText(
+          key: _paraKey,
+          textAlign: TextAlign.justify,
+          textDirection: TextDirection.rtl,
+          textScaler: MediaQuery.textScalerOf(context),
+          text: TextSpan(style: base, children: spans),
+        ),
       ]),
     );
   }
