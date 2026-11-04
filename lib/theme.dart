@@ -231,25 +231,28 @@ class SurahCartouche extends StatelessWidget {
             child: Text('سورة ${surahNameAr(surah)}',
                 style: GoogleFonts.amiri(fontSize: 24 * k, height: 1.2, fontWeight: FontWeight.w700, color: kPrimary)),
           ),
-          Align(
-            alignment: const Alignment(0.788, 0),
-            child: Text(arNum(surah),
-                style: GoogleFonts.amiri(fontSize: 16 * k, height: 1.1, fontWeight: FontWeight.w700, color: Colors.white)),
-          ),
-          Align(
-            alignment: const Alignment(-0.788, 0),
-            child: SizedBox(
-              width: 32 * k,
-              child: Text('${arNum(n)}\n${ayahWord(n)}',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.amiri(fontSize: 10 * k, height: 1.05, color: Colors.white)),
-            ),
-          ),
+          // Each number sits in a box exactly over its roundel (radius 17 at x = 304 and x = 36).
+          _roundel(304, k, Text(arNum(surah),
+              style: GoogleFonts.amiri(fontSize: 16 * k, height: 1.1, fontWeight: FontWeight.w700, color: Colors.white))),
+          _roundel(36, k, Text('${arNum(n)}\n${ayahWord(n)}',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.amiri(fontSize: 11 * k, height: 1.05, color: Colors.white))),
         ]);
       }),
     );
   }
 }
+
+Widget _roundel(double cx, double k, Widget child) => Positioned(
+      left: (cx - 17) * k,
+      top: 20 * k,
+      width: 34 * k,
+      height: 34 * k,
+      child: Padding(
+        padding: EdgeInsets.all(5 * k),
+        child: Center(child: FittedBox(fit: BoxFit.scaleDown, child: child)),
+      ),
+    );
 
 class _CartouchePainter extends CustomPainter {
   final Palette p;
