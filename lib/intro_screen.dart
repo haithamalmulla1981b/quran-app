@@ -120,7 +120,7 @@ class _IntroScreenState extends State<IntroScreen> with TickerProviderStateMixin
                         scale: 0.4 + 0.6 * star.value,
                         child: Opacity(
                           opacity: star.value.clamp(0.0, 1.0),
-                          child: const SizedBox(width: 120, height: 120, child: CustomPaint(painter: _StarPainter())),
+                          child: Image.asset('assets/logo.png', width: 124, height: 124, filterQuality: FilterQuality.high),
                         ),
                       ),
                     ),
@@ -190,36 +190,4 @@ class _IntroScreenState extends State<IntroScreen> with TickerProviderStateMixin
       ),
     );
   }
-}
-
-/// Eight-pointed star (two overlapping squares) in gold, with an inner ring.
-class _StarPainter extends CustomPainter {
-  const _StarPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final c = size.center(Offset.zero);
-    final r = size.width / 2;
-    final side = r * 1.38;
-    final fill = Paint()..color = const Color(0x22E9D9AE);
-    final stroke = Paint()
-      ..color = kGold
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3;
-    for (final angle in [0.0, math.pi / 4]) {
-      canvas.save();
-      canvas.translate(c.dx, c.dy);
-      canvas.rotate(angle);
-      final rect = Rect.fromCenter(center: Offset.zero, width: side, height: side);
-      canvas.drawRect(rect, fill);
-      canvas.drawRect(rect, stroke);
-      canvas.restore();
-    }
-    canvas.drawCircle(c, r * 0.42, stroke);
-    canvas.drawCircle(c, r * 0.30, Paint()..color = const Color(0xFFE9D9AE));
-    canvas.drawCircle(c, r * 0.30, stroke..strokeWidth = 2);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
