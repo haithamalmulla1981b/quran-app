@@ -12,6 +12,7 @@ class AppState extends ChangeNotifier {
 
   bool dark = false;
   double fontSize = 28;
+  bool pageView = true; // continuous Mushaf-style text
   List<String> bookmarks = []; // "s:a"
   String? lastRead; // "s:a"
 
@@ -20,6 +21,7 @@ class AppState extends ChangeNotifier {
     quran = await QuranData.load();
     dark = _prefs.getBool('dark') ?? false;
     fontSize = _prefs.getDouble('fontSize') ?? 28;
+    pageView = _prefs.getBool('pageView') ?? true;
     bookmarks = _prefs.getStringList('bookmarks') ?? [];
     lastRead = _prefs.getString('lastRead');
     final rid = _prefs.getString('reciter');
@@ -31,6 +33,12 @@ class AppState extends ChangeNotifier {
   void toggleDark() {
     dark = !dark;
     _prefs.setBool('dark', dark);
+    notifyListeners();
+  }
+
+  void togglePageView() {
+    pageView = !pageView;
+    _prefs.setBool('pageView', pageView);
     notifyListeners();
   }
 

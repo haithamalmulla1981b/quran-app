@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
@@ -25,6 +26,41 @@ class _ReaderScreenState extends State<ReaderScreen> {
   int? _followed;
   int? _flash;
   Timer? _saveTimer;
+  late final List<List<int>> _chunks = _buildChunks(); // page view: ayah numbers per paragraph
+  late final List<int> _chunkOf = _buildChunkIndex(); // ayah -> list index
+  final Map<int, TapGestureRecognizer> _taps = {};
+
+  /// Splits the surah into paragraphs of roughly equal length so the list
+  /// can scroll to the ayah being recited.
+  List<List<int>> _buildChunks() {
+    final out = <List<int>>[];
+    var cur = <int>[];
+    var len = 0;
+    for (var a = 1; a <= _view.ayahs.length; a++) {
+      cur.add(a);
+      len += _view.ayahs[a - 1].length;
+      if (len >= 420) {
+        out.add(cur);
+        cur = <int>[];
+        len = 0;
+      }
+    }
+    if (cur.isNotEmpty) out.add(cur);
+    return out;
+  }
+
+  List<int> _buildChunkIndex() {
+    final idx = List<int>.filled(_view.ayahs.length + 1, 0);
+    for (var c = 0; c < _chunks.length; c++) {
+      for (final a in _chunks[c]) {
+        idx[a] = c + 1; // list index 0 is the header
+      }
+    }
+    return idx;
+  }
+
+  /// List index that holds this ayah in the current layout.
+  int _indexOf(int a) => app.pageView ? _chunkOf[a] : a;
 
   int get s => widget.surah;
 
@@ -46,6 +82,9 @@ class _ReaderScreenState extends State<ReaderScreen> {
     _saveTimer?.cancel();
     app.audio.removeListener(_followAudio);
     _positions.itemPositions.removeListener(_onScroll);
+    for (final t in _taps.values) {
+      t.dispose();
+    }
     super.dispose();
   }
 
@@ -56,7 +95,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
     _followed = a.currentAyah;
     if (_scroll.isAttached) {
       _scroll.scrollTo(
-        index: a.currentAyah!, // index 0 is the surah header
+        index: _indexOf(a.currentAyah!), // index 0 is the surah header
         duration: const Duration(milliseconds: 450),
         curve: Curves.easeInOut,
         alignment: 0.15,
@@ -71,7 +110,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
       final visible = _positions.itemPositions.value.where((p) => p.itemTrailingEdge > 0.1);
       if (visible.isEmpty || !mounted) return;
       final first = visible.map((p) => p.index).reduce((x, y) => x < y ? x : y);
-      app.setLastRead(s, first < 1 ? 1 : first);
+      final ayah = first < 1 ? 1 : (app.pageView ? _chunks[first - 1].first : first);
+      app.setLastRead(s, ayah);
     });
   }
 
@@ -151,10 +191,15 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return ListenableBuilder(listenable: app, builder: (context, _) => Scaffold(
       appBar: AppBar(
         title: Text('سورة ${surahNameAr(s)}'),
         actions: [
+          IconButton(
+            tooltip: app.pageView ? 'عرض الآيات منفصلة' : 'عرض المصحف',
+            onPressed: app.togglePageView,
+            icon: Icon(app.pageView ? Icons.view_agenda_outlined : Icons.menu_book_rounded),
+          ),
           _DownloadButton(surah: s),
           IconButton(tooltip: 'حجم الخط', onPressed: _showFontSize, icon: const Icon(Icons.text_fields_rounded)),
         ],
@@ -164,15 +209,17 @@ class _ReaderScreenState extends State<ReaderScreen> {
         builder: (context, _) => ScrollablePositionedList.builder(
           itemScrollController: _scroll,
           itemPositionsListener: _positions,
-          initialScrollIndex: widget.initialAyah ?? 0,
+          initialScrollIndex: widget.initialAyah == null ? 0 : _indexOf(widget.initialAyah!),
           initialAlignment: widget.initialAyah != null ? 0.1 : 0,
           padding: const EdgeInsets.only(bottom: 24),
-          itemCount: _view.ayahs.length + 1,
-          itemBuilder: (context, i) => i == 0 ? _header(context) : _ayah(context, i),
+          itemCount: (app.pageView ? _chunks.length : _view.ayahs.length) + 1,
+          itemBuilder: (context, i) => i == 0
+              ? _header(context)
+              : (app.pageView ? _paragraph(context, i - 1) : _ayah(context, i)),
         ),
       ),
       bottomNavigationBar: PlayerBar(surah: s, full: true),
-    );
+    ));
   }
 
   Widget _header(BuildContext context) {
@@ -204,6 +251,46 @@ class _ReaderScreenState extends State<ReaderScreen> {
             ),
         ]),
       ),
+    );
+  }
+
+  /// Page view: ayahs flow together; the recited ayah is highlighted in place.
+  Widget _paragraph(BuildContext context, int c) {
+    final p = paletteOf(context);
+    final first = c == 0, last = c == _chunks.length - 1;
+    final base = quranStyle(app.fontSize, p.ink);
+    final spans = <InlineSpan>[];
+    for (final a in _chunks[c]) {
+      final playing = app.audio.surah == s && app.audio.currentAyah == a;
+      final hl = playing || _flash == a;
+      final bg = hl ? p.highlight : null;
+      final tap = _taps.putIfAbsent(a, () => TapGestureRecognizer()..onTap = () => _showAyahActions(a));
+      spans.add(TextSpan(
+        text: _view.ayahs[a - 1],
+        style: base.copyWith(backgroundColor: bg),
+        recognizer: tap,
+      ));
+      spans.add(TextSpan(
+        text: '\u00A0﴿${arNum(a)}﴾',
+        style: quranStyle(app.fontSize * 0.85, app.isBookmarked(s, a) ? p.accent : kGold)
+            .copyWith(backgroundColor: bg),
+        recognizer: tap,
+      ));
+      spans.add(TextSpan(text: ' ', style: base));
+    }
+    return Container(
+      margin: EdgeInsets.fromLTRB(12, first ? 4 : 0, 12, last ? 8 : 0),
+      padding: EdgeInsets.fromLTRB(16, first ? 12 : 0, 16, last ? 14 : 0),
+      decoration: BoxDecoration(
+        color: p.page,
+        border: Border(
+          left: BorderSide(color: p.line),
+          right: BorderSide(color: p.line),
+          top: first ? BorderSide(color: p.line) : BorderSide.none,
+          bottom: last ? BorderSide(color: p.line) : BorderSide.none,
+        ),
+      ),
+      child: Text.rich(TextSpan(children: spans), textAlign: TextAlign.justify),
     );
   }
 
