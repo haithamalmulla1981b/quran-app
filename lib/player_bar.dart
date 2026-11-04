@@ -10,7 +10,8 @@ import 'theme.dart';
 class PlayerBar extends StatelessWidget {
   final int? surah;
   final bool full;
-  const PlayerBar({super.key, this.surah, this.full = false});
+  final GlobalKey? playKey, repeatKey; // targets for the first-run guide
+  const PlayerBar({super.key, this.surah, this.full = false, this.playKey, this.repeatKey});
 
   @override
   Widget build(BuildContext context) {
@@ -76,10 +77,13 @@ class PlayerBar extends StatelessWidget {
                           onPressed: audio.cycleSpeed,
                           child: Text('${audio.speed}x', style: TextStyle(color: p.accent, fontSize: 14)),
                         ),
-                        IconButton(
-                          tooltip: repeatLabel,
-                          onPressed: audio.cycleRepeat,
-                          icon: Icon(repeatIcon, color: audio.repeat == RepeatMode.off ? p.muted : kGold),
+                        KeyedSubtree(
+                          key: repeatKey,
+                          child: IconButton(
+                            tooltip: repeatLabel,
+                            onPressed: audio.cycleRepeat,
+                            icon: Icon(repeatIcon, color: audio.repeat == RepeatMode.off ? p.muted : kGold),
+                          ),
                         ),
                       ],
                       IconButton(
@@ -88,6 +92,7 @@ class PlayerBar extends StatelessWidget {
                         icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
                       ),
                       SizedBox(
+                        key: playKey,
                         width: 52,
                         height: 52,
                         child: audio.loading && audio.loadingSurah == target
@@ -96,7 +101,7 @@ class PlayerBar extends StatelessWidget {
                                 child: CircularProgressIndicator(strokeWidth: 3, color: p.accent),
                               )
                             : IconButton.filled(
-                                style: IconButton.styleFrom(backgroundColor: kGreen, foregroundColor: Colors.white),
+                                style: IconButton.styleFrom(backgroundColor: kPrimary, foregroundColor: kCreamGold),
                                 tooltip: isPlaying ? 'إيقاف مؤقت' : 'تشغيل',
                                 onPressed: () => audio.togglePlay(target),
                                 icon: Icon(isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded, size: 30),

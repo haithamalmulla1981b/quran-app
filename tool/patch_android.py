@@ -54,7 +54,7 @@ open(acts[0], 'w', encoding='utf-8').write(
 
 launch = ('<?xml version="1.0" encoding="utf-8"?>\n'
           '<layer-list xmlns:android="http://schemas.android.com/apk/res/android">\n'
-          '    <item><color android:color="#1F5E4A" /></item>\n'
+          '    <item><color android:color="#1B3A6B" /></item>\n'
           '</layer-list>\n')
 for f in glob.glob('android/app/src/main/res/drawable*/launch_background.xml'):
     open(f, 'w', encoding='utf-8').write(launch)

@@ -37,6 +37,9 @@ String surahNameAr(int s) => kSurahs[s - 1][0] as String;
 String surahNameEn(int s) => kSurahs[s - 1][1] as String;
 int ayahCount(int s) => kSurahs[s - 1][2] as int;
 
+/// Arabic counted noun: 3–10 take the plural.
+String ayahWord(int n) => (n >= 3 && n <= 10) ? 'آيات' : 'آية';
+
 const _arDigits = '٠١٢٣٤٥٦٧٨٩';
 String arNum(int n) =>
     n.toString().split('').map((d) => _arDigits[int.parse(d)]).join();

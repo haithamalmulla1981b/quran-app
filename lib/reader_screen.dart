@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import 'app_state.dart';
+import 'coach_marks.dart';
 import 'player_bar.dart';
 import 'quran_data.dart';
 import 'theme.dart';
@@ -30,6 +31,8 @@ class _ReaderScreenState extends State<ReaderScreen> {
   late final List<List<int>> _chunks = _buildChunks(); // page view: ayah numbers per paragraph
   late final List<int> _chunkOf = _buildChunkIndex(); // ayah -> list index
   final Map<int, TapGestureRecognizer> _taps = {};
+  final _viewKey = GlobalKey(), _downloadKey = GlobalKey(), _fontKey = GlobalKey();
+  final _bodyKey = GlobalKey(), _playKey = GlobalKey(), _repeatKey = GlobalKey();
 
   /// Splits the surah into paragraphs of roughly equal length so the list
   /// can scroll to the ayah being recited.
@@ -70,6 +73,9 @@ class _ReaderScreenState extends State<ReaderScreen> {
     super.initState();
     app.audio.addListener(_followAudio);
     _positions.itemPositions.addListener(_onScroll);
+    if (!app.guideReaderSeen) {
+      Future.delayed(const Duration(milliseconds: 800), _showGuide);
+    }
     if (widget.initialAyah != null) {
       _flash = widget.initialAyah;
       Future.delayed(const Duration(milliseconds: 1600), () {
@@ -87,6 +93,19 @@ class _ReaderScreenState extends State<ReaderScreen> {
       t.dispose();
     }
     super.dispose();
+  }
+
+  Future<void> _showGuide() async {
+    if (!mounted) return;
+    app.markGuideReader();
+    await showCoachMarks(context, [
+      CoachStep(_bodyKey, 'الآيات', 'اضغط على أي آية للاستماع منها، أو لإضافة علامة، أو لنسخها.'),
+      CoachStep(_playKey, 'التشغيل', 'استمع إلى التلاوة. تُظلَّل الآية المقروءة، ويستمر الصوت في الخلفية مع إشعار للتحكم.'),
+      CoachStep(_repeatKey, 'التكرار', 'اضغط لتكرار الآية أو السورة، وهو مفيد للحفظ. وبجانبه زر سرعة التلاوة.'),
+      CoachStep(_viewKey, 'طريقة العرض', 'بدّل بين عرض المصحف المتصل وعرض كل آية في بطاقة.'),
+      CoachStep(_downloadKey, 'تنزيل السورة', 'احفظ تلاوة السورة كاملة للاستماع دون إنترنت.'),
+      CoachStep(_fontKey, 'حجم الخط', 'كبّر الخط أو صغّره بما يريح عينيك.'),
+    ]);
   }
 
   DateTime _userScrolledAt = DateTime.fromMillisecondsSinceEpoch(0);
@@ -213,15 +232,17 @@ class _ReaderScreenState extends State<ReaderScreen> {
         title: Text('سورة ${surahNameAr(s)}'),
         actions: [
           IconButton(
+            key: _viewKey,
             tooltip: app.pageView ? 'عرض الآيات منفصلة' : 'عرض المصحف',
             onPressed: app.togglePageView,
             icon: Icon(app.pageView ? Icons.view_agenda_outlined : Icons.menu_book_rounded),
           ),
-          _DownloadButton(surah: s),
-          IconButton(tooltip: 'حجم الخط', onPressed: _showFontSize, icon: const Icon(Icons.text_fields_rounded)),
+          KeyedSubtree(key: _downloadKey, child: _DownloadButton(surah: s)),
+          IconButton(key: _fontKey, tooltip: 'حجم الخط', onPressed: _showFontSize, icon: const Icon(Icons.text_fields_rounded)),
         ],
       ),
       body: ListenableBuilder(
+        key: _bodyKey,
         listenable: Listenable.merge([app, app.audio]),
         builder: (context, _) => NotificationListener<UserScrollNotification>(
           onNotification: _onUserScroll,
@@ -238,34 +259,22 @@ class _ReaderScreenState extends State<ReaderScreen> {
           ),
         ),
       ),
-      bottomNavigationBar: PlayerBar(surah: s, full: true),
+      bottomNavigationBar: PlayerBar(surah: s, full: true, playKey: _playKey, repeatKey: _repeatKey),
     ));
   }
 
   Widget _header(BuildContext context) {
     final p = paletteOf(context);
-    return PageCard(
-      margin: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+    return FrameSlice(
+      first: true,
+      last: !app.pageView,
       child: Padding(
-        padding: const EdgeInsets.all(10),
+        padding: const EdgeInsets.only(bottom: 4),
         child: Column(children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            decoration: BoxDecoration(
-              border: Border.all(color: kGold, width: 2),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Column(children: [
-              Text('سورة ${surahNameAr(s)}',
-                  style: TextStyle(fontSize: 30, fontWeight: FontWeight.w700, color: p.accent)),
-              Text('${surahNameEn(s)} · ${arNum(ayahCount(s))} آية',
-                  style: TextStyle(fontSize: 14, color: p.muted)),
-            ]),
-          ),
+          SurahCartouche(s),
           if (_view.basmala != null)
             Padding(
-              padding: const EdgeInsets.only(top: 10),
+              padding: const EdgeInsets.only(top: 8),
               child: Text(_view.basmala!,
                   textAlign: TextAlign.center, style: quranStyle(app.fontSize * 0.95, p.ink)),
             ),
@@ -277,7 +286,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   /// Page view: ayahs flow together; the recited ayah is highlighted in place.
   Widget _paragraph(BuildContext context, int c) {
     final p = paletteOf(context);
-    final first = c == 0, last = c == _chunks.length - 1;
+    final last = c == _chunks.length - 1;
     final base = quranStyle(app.fontSize, p.ink);
     final spans = <InlineSpan>[];
     for (final a in _chunks[c]) {
@@ -290,26 +299,20 @@ class _ReaderScreenState extends State<ReaderScreen> {
         style: base.copyWith(backgroundColor: bg),
         recognizer: tap,
       ));
-      spans.add(TextSpan(
-        text: '\u00A0﴿${arNum(a)}﴾',
-        style: quranStyle(app.fontSize * 0.85, app.isBookmarked(s, a) ? p.accent : kGold)
-            .copyWith(backgroundColor: bg),
-        recognizer: tap,
+      spans.add(WidgetSpan(
+        alignment: PlaceholderAlignment.middle,
+        child: GestureDetector(
+          onTap: () => _showAyahActions(a),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Rosette(a, size: app.fontSize * 1.1, active: playing || app.isBookmarked(s, a)),
+          ),
+        ),
       ));
       spans.add(TextSpan(text: ' ', style: base));
     }
-    return Container(
-      margin: EdgeInsets.fromLTRB(12, first ? 4 : 0, 12, last ? 8 : 0),
-      padding: EdgeInsets.fromLTRB(16, first ? 12 : 0, 16, last ? 14 : 0),
-      decoration: BoxDecoration(
-        color: p.page,
-        border: Border(
-          left: BorderSide(color: p.line),
-          right: BorderSide(color: p.line),
-          top: first ? BorderSide(color: p.line) : BorderSide.none,
-          bottom: last ? BorderSide(color: p.line) : BorderSide.none,
-        ),
-      ),
+    return FrameSlice(
+      last: last,
       child: Text.rich(TextSpan(children: spans), textAlign: TextAlign.justify),
     );
   }
@@ -331,7 +334,13 @@ class _ReaderScreenState extends State<ReaderScreen> {
               Text.rich(
                 TextSpan(children: [
                   TextSpan(text: _view.ayahs[a - 1], style: quranStyle(app.fontSize, p.ink)),
-                  TextSpan(text: ' ﴿${arNum(a)}﴾', style: quranStyle(app.fontSize * 0.85, kGold)),
+                  WidgetSpan(
+                    alignment: PlaceholderAlignment.middle,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Rosette(a, size: app.fontSize * 1.1, active: playingThis || bookmarked),
+                    ),
+                  ),
                 ]),
                 textAlign: TextAlign.start,
               ),
@@ -373,7 +382,7 @@ class _DownloadButtonState extends State<_DownloadButton> {
             child: SizedBox(
               width: 22,
               height: 22,
-              child: CircularProgressIndicator(value: progress, strokeWidth: 3, color: Colors.white),
+              child: CircularProgressIndicator(value: progress, strokeWidth: 3, color: kCreamGold),
             ),
           );
         }
@@ -384,7 +393,7 @@ class _DownloadButtonState extends State<_DownloadButton> {
               return const IconButton(
                 tooltip: 'محفوظة للاستماع دون إنترنت',
                 onPressed: null,
-                icon: Icon(Icons.download_done_rounded, color: Colors.white),
+                icon: Icon(Icons.download_done_rounded, color: kCreamGold),
               );
             }
             return IconButton(

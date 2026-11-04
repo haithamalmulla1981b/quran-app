@@ -53,7 +53,7 @@ class _IntroScreenState extends State<IntroScreen> with SingleTickerProviderStat
     final sub = _seg(0.50, 0.85);
     final credit = _seg(0.70, 1.0);
     return Scaffold(
-      backgroundColor: kGreen,
+      backgroundColor: kPrimary,
       body: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => _ready.then((_) => _go()), // tap to skip
@@ -78,7 +78,7 @@ class _IntroScreenState extends State<IntroScreen> with SingleTickerProviderStat
                   child: Transform.translate(
                     offset: Offset(0, 24 * (1 - title.value)),
                     child: Text('القرآن الكريم',
-                        style: GoogleFonts.amiri(fontSize: 44, fontWeight: FontWeight.w700, color: Colors.white)),
+                        style: GoogleFonts.amiri(fontSize: 44, fontWeight: FontWeight.w700, color: kCreamGold)),
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -92,13 +92,10 @@ class _IntroScreenState extends State<IntroScreen> with SingleTickerProviderStat
             Positioned(
               left: 0,
               right: 0,
-              bottom: 40,
+              bottom: 28,
               child: Opacity(
                 opacity: credit.value,
-                child: Text('Developed By: H.M.Al-Mulla',
-                    textAlign: TextAlign.center,
-                    textDirection: TextDirection.ltr,
-                    style: TextStyle(fontSize: 14, color: Colors.white.withValues(alpha: 0.75), letterSpacing: 0.5)),
+                child: const DeveloperCredit(color: kCreamGold, size: 26),
               ),
             ),
           ]),

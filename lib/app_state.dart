@@ -13,6 +13,8 @@ class AppState extends ChangeNotifier {
   bool dark = false;
   double fontSize = 28;
   bool pageView = true; // continuous Mushaf-style text
+  bool guideHomeSeen = false;
+  bool guideReaderSeen = false;
   List<String> bookmarks = []; // "s:a"
   String? lastRead; // "s:a"
 
@@ -22,6 +24,8 @@ class AppState extends ChangeNotifier {
     dark = _prefs.getBool('dark') ?? false;
     fontSize = _prefs.getDouble('fontSize') ?? 28;
     pageView = _prefs.getBool('pageView') ?? true;
+    guideHomeSeen = _prefs.getBool('guideHome') ?? false;
+    guideReaderSeen = _prefs.getBool('guideReader') ?? false;
     bookmarks = _prefs.getStringList('bookmarks') ?? [];
     lastRead = _prefs.getString('lastRead');
     final rid = _prefs.getString('reciter');
@@ -35,6 +39,23 @@ class AppState extends ChangeNotifier {
     dark = !dark;
     _prefs.setBool('dark', dark);
     notifyListeners();
+  }
+
+  void markGuideHome() {
+    guideHomeSeen = true;
+    _prefs.setBool('guideHome', true);
+  }
+
+  void markGuideReader() {
+    guideReaderSeen = true;
+    _prefs.setBool('guideReader', true);
+  }
+
+  void resetGuides() {
+    guideHomeSeen = false;
+    guideReaderSeen = false;
+    _prefs.setBool('guideHome', false);
+    _prefs.setBool('guideReader', false);
   }
 
   void togglePageView() {

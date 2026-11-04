@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_state.dart';
+import 'coach_marks.dart';
 import 'player_bar.dart';
 import 'quran_data.dart';
 import 'reader_screen.dart';
@@ -17,6 +18,33 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final _search = TextEditingController();
   String _query = '';
+  final _searchKey = GlobalKey(), _playKey = GlobalKey(), _settingsKey = GlobalKey();
+  final _darkKey = GlobalKey(), _tabsKey = GlobalKey();
+
+  @override
+  void initState() {
+    super.initState();
+    if (!app.guideHomeSeen) {
+      Future.delayed(const Duration(milliseconds: 900), _showGuide);
+    }
+  }
+
+  Future<void> _showGuide() async {
+    if (!mounted) return;
+    app.markGuideHome();
+    await showCoachMarks(context, [
+      CoachStep(_searchKey, 'البحث', 'ابحث عن سورة باسمها أو عن آية بكلماتها، ولا يلزم كتابة التشكيل.'),
+      CoachStep(_playKey, 'استماع سريع', 'شغّل تلاوة السورة مباشرة دون فتحها.'),
+      CoachStep(_tabsKey, 'السور والعلامات', 'تنقّل بين قائمة السور والآيات التي حفظت عليها علامة.'),
+      CoachStep(_settingsKey, 'الإعدادات', 'اختر القارئ، وغيّر حجم الخط، وأدر التلاوات المحفوظة.'),
+      CoachStep(_darkKey, 'الوضع الليلي', 'للقراءة المريحة في الإضاءة المنخفضة.'),
+    ]);
+  }
+
+  Future<void> _openSettings() async {
+    final r = await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsScreen()));
+    if (r == 'guide') _showGuide();
+  }
 
   @override
   void dispose() {
@@ -43,6 +71,7 @@ class _HomeScreenState extends State<HomeScreen> {
           title: const Text('القرآن الكريم'),
           leading: IconButton(
             tooltip: 'الوضع الليلي',
+            key: _darkKey,
             onPressed: app.toggleDark,
             icon: Icon(app.dark ? Icons.light_mode_rounded : Icons.dark_mode_rounded),
           ),
@@ -50,7 +79,8 @@ class _HomeScreenState extends State<HomeScreen> {
             IconButton(
               tooltip: 'الإعدادات',
               icon: const Icon(Icons.settings_rounded),
-              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsScreen())),
+              key: _settingsKey,
+              onPressed: _openSettings,
             ),
           ],
         ),
@@ -59,6 +89,7 @@ class _HomeScreenState extends State<HomeScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
               child: TextField(
+                key: _searchKey,
                 controller: _search,
                 onChanged: (v) => setState(() => _query = v),
                 decoration: InputDecoration(
@@ -83,6 +114,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             if (_query.trim().isEmpty) ...[
               TabBar(
+                key: _tabsKey,
                 labelColor: p.accent,
                 indicatorColor: p.accent,
                 labelStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
@@ -105,7 +137,8 @@ class _HomeScreenState extends State<HomeScreen> {
       itemCount: 114 + (last != null ? 1 : 0),
       itemBuilder: (context, i) {
         if (last != null && i == 0) return _continueCard(last[0], last[1]);
-        return _surahTile(i + (last != null ? 0 : 1));
+        final s = i + (last != null ? 0 : 1);
+        return _surahTile(s, guide: s == 1);
       },
     );
   }
@@ -124,16 +157,17 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _surahTile(int s) {
+  Widget _surahTile(int s, {bool guide = false}) {
     final p = paletteOf(context);
     return PageCard(
       margin: const EdgeInsets.fromLTRB(12, 3, 12, 3),
       child: ListTile(
         onTap: () => _open(s),
-        leading: _NumberBadge(s),
+        leading: Rosette(s, size: 38),
         title: Text('سورة ${surahNameAr(s)}', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: p.ink)),
-        subtitle: Text('${surahNameEn(s)} · ${arNum(ayahCount(s))} آية', style: TextStyle(color: p.muted, fontSize: 14)),
+        subtitle: Text('${arNum(ayahCount(s))} ${ayahWord(ayahCount(s))}', style: TextStyle(color: p.muted, fontSize: 14)),
         trailing: IconButton(
+          key: guide ? _playKey : null,
           tooltip: 'استماع',
           icon: Icon(Icons.play_circle_outline_rounded, color: p.accent),
           onPressed: () => app.audio.playSurah(s),
@@ -229,32 +263,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _NumberBadge extends StatelessWidget {
-  final int n;
-  const _NumberBadge(this.n);
-
-  @override
-  Widget build(BuildContext context) {
-    final p = paletteOf(context);
-    return Transform.rotate(
-      angle: 0.785398,
-      child: Container(
-        width: 38,
-        height: 38,
-        decoration: BoxDecoration(
-          color: p.accent.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(9),
-        ),
-        alignment: Alignment.center,
-        child: Transform.rotate(
-          angle: -0.785398,
-          child: Text(arNum(n), style: TextStyle(color: p.accent, fontWeight: FontWeight.w700, fontSize: 16)),
         ),
       ),
     );

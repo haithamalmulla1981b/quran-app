@@ -95,18 +95,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
               ),
-              Padding(padding: const EdgeInsets.fromLTRB(20, 16, 20, 4), child: Text('حول التطبيق', style: head)),
               PageCard(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text(
-                    'نص القرآن الكريم: مشروع تنزيل (tanzil.net) — الرسم العثماني، منقول دون تعديل.\n'
-                    'التلاوات: EveryAyah.com — تُحفظ كل آية على الجهاز بعد أول استماع.\n\n'
-                    'Developed By: H.M.Al-Mulla',
-                    style: TextStyle(fontSize: 15, color: p.muted, height: 1.7),
-                  ),
+                child: ListTile(
+                  leading: Icon(Icons.help_outline_rounded, color: p.accent),
+                  title: const Text('عرض الدليل', style: TextStyle(fontSize: 18)),
+                  subtitle: const Text('شرح سريع لأهم الأزرار'),
+                  onTap: () {
+                    app.resetGuides();
+                    Navigator.of(context).pop('guide');
+                  },
                 ),
               ),
+              const SizedBox(height: 28),
+              DeveloperCredit(color: p.muted),
+              const SizedBox(height: 10),
+              Text('النص القرآني: tanzil.net',
+                  textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: p.muted)),
+              const SizedBox(height: 20),
             ],
           ),
         );
