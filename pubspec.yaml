@@ -1,0 +1,22 @@
+name: quran_app
+description: Quran reader with on-demand, offline-cached recitation audio.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  just_audio: ^0.9.42
+  path_provider: ^2.1.4
+  shared_preferences: ^2.3.2
+  http: ^1.2.2
+  google_fonts: ^6.2.1
+  scrollable_positioned_list: ^0.3.8
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/quran-uthmani.txt
