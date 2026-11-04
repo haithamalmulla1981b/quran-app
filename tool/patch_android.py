@@ -59,4 +59,24 @@ launch = ('<?xml version="1.0" encoding="utf-8"?>\n'
 for f in glob.glob('android/app/src/main/res/drawable*/launch_background.xml'):
     open(f, 'w', encoding='utf-8').write(launch)
 
+# App icon: legacy PNGs plus an adaptive icon (Android 8+) on a cream background.
+import os
+import shutil
+RES = 'android/app/src/main/res'
+for d in ['mdpi', 'hdpi', 'xhdpi', 'xxhdpi', 'xxxhdpi']:
+    os.makedirs(f'{RES}/mipmap-{d}', exist_ok=True)
+    shutil.copy(f'tool/icons/ic_launcher_{d}.png', f'{RES}/mipmap-{d}/ic_launcher.png')
+    shutil.copy(f'tool/icons/ic_launcher_foreground_{d}.png', f'{RES}/mipmap-{d}/ic_launcher_foreground.png')
+os.makedirs(f'{RES}/mipmap-anydpi-v26', exist_ok=True)
+open(f'{RES}/mipmap-anydpi-v26/ic_launcher.xml', 'w').write(
+    '<?xml version="1.0" encoding="utf-8"?>\n'
+    '<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">\n'
+    '    <background android:drawable="@color/ic_launcher_background"/>\n'
+    '    <foreground android:drawable="@mipmap/ic_launcher_foreground"/>\n'
+    '</adaptive-icon>\n')
+os.makedirs(f'{RES}/values', exist_ok=True)
+open(f'{RES}/values/ic_launcher_background.xml', 'w').write(
+    '<?xml version="1.0" encoding="utf-8"?>\n'
+    '<resources><color name="ic_launcher_background">#FBF6E9</color></resources>\n')
+
 print('Android project patched:', acts[0])
