@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -7,7 +8,13 @@ import 'app_state.dart';
 import 'home_screen.dart';
 import 'theme.dart';
 
-/// Animated intro shown at launch while the Quran text loads.
+// Al-Ahzab 33:23 (opening words), exactly as in the Tanzil text.
+const _ayah = 'مِّنَ ٱلْمُؤْمِنِينَ '
+    'رِجَالٌ صَدَقُوا۟ مَا '
+    'عَـٰهَدُوا۟ ٱللَّهَ '
+    'عَلَيْهِ';
+
+/// Animated intro: star, title, then the ayah typed letter by letter.
 class IntroScreen extends StatefulWidget {
   const IntroScreen({super.key});
 
@@ -15,23 +22,50 @@ class IntroScreen extends StatefulWidget {
   State<IntroScreen> createState() => _IntroScreenState();
 }
 
-class _IntroScreenState extends State<IntroScreen> with SingleTickerProviderStateMixin {
+class _IntroScreenState extends State<IntroScreen> with TickerProviderStateMixin {
+  // Star, title and subtitle over the first 3.6 s.
   late final AnimationController _c =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 2600))..forward();
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 3600))..forward();
+  late final AnimationController _credit =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 1000));
   late final Future<void> _ready = app.init();
+  // Each letter keeps its diacritics while typing.
+  final List<String> _letters = _ayah.characters.toList();
+  int _typed = 0;
+  bool _cursorOn = true;
+  final List<Timer> _timers = [];
   bool _left = false;
 
   @override
   void initState() {
     super.initState();
-    Future.wait([_ready, Future.delayed(const Duration(milliseconds: 2900))]).then((_) => _go());
+    _ready; // start loading the Quran text now
+    _timers.add(Timer(const Duration(milliseconds: 3600), _startTyping));
+    _timers.add(Timer.periodic(const Duration(milliseconds: 450), (_) {
+      if (mounted) setState(() => _cursorOn = !_cursorOn);
+    }));
+  }
+
+  void _startTyping() {
+    _timers.add(Timer.periodic(const Duration(milliseconds: 85), (t) {
+      if (!mounted) return;
+      if (_typed >= _letters.length) {
+        t.cancel();
+        _timers.add(Timer(const Duration(milliseconds: 600), () {
+          if (mounted) _credit.forward();
+        }));
+        _timers.add(Timer(const Duration(milliseconds: 3000), () => _ready.then((_) => _go())));
+        return;
+      }
+      setState(() => _typed++);
+    }));
   }
 
   void _go() {
     if (_left || !mounted) return;
     _left = true;
     Navigator.of(context).pushReplacement(PageRouteBuilder(
-      transitionDuration: const Duration(milliseconds: 500),
+      transitionDuration: const Duration(milliseconds: 600),
       pageBuilder: (_, __, ___) => const HomeScreen(),
       transitionsBuilder: (_, anim, __, child) => FadeTransition(opacity: anim, child: child),
     ));
@@ -39,7 +73,11 @@ class _IntroScreenState extends State<IntroScreen> with SingleTickerProviderStat
 
   @override
   void dispose() {
+    for (final t in _timers) {
+      t.cancel();
+    }
     _c.dispose();
+    _credit.dispose();
     super.dispose();
   }
 
@@ -48,53 +86,90 @@ class _IntroScreenState extends State<IntroScreen> with SingleTickerProviderStat
 
   @override
   Widget build(BuildContext context) {
-    final star = _seg(0.0, 0.55, Curves.easeOutBack);
-    final title = _seg(0.30, 0.70);
-    final sub = _seg(0.50, 0.85);
-    final credit = _seg(0.70, 1.0);
+    final star = _seg(0.0, 0.56, Curves.easeOutBack);
+    final title = _seg(0.44, 0.72);
+    final sub = _seg(0.72, 1.0);
     return Scaffold(
       backgroundColor: kPrimary,
       body: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => _ready.then((_) => _go()), // tap to skip
         child: AnimatedBuilder(
-          animation: _c,
+          animation: Listenable.merge([_c, _credit]),
           builder: (context, _) => Stack(children: [
-            Center(
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Transform.rotate(
-                  angle: (1 - star.value) * -math.pi / 2,
-                  child: Transform.scale(
-                    scale: 0.4 + 0.6 * star.value,
-                    child: Opacity(
-                      opacity: star.value.clamp(0.0, 1.0),
-                      child: const SizedBox(width: 150, height: 150, child: CustomPaint(painter: _StarPainter())),
+            Positioned.fill(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Center(
+                    child: Transform.rotate(
+                      angle: (1 - star.value) * -math.pi / 2,
+                      child: Transform.scale(
+                        scale: 0.4 + 0.6 * star.value,
+                        child: Opacity(
+                          opacity: star.value.clamp(0.0, 1.0),
+                          child: const SizedBox(width: 140, height: 140, child: CustomPaint(painter: _StarPainter())),
+                        ),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 28),
-                Opacity(
-                  opacity: title.value,
-                  child: Transform.translate(
-                    offset: Offset(0, 24 * (1 - title.value)),
-                    child: Text('القرآن الكريم',
-                        style: GoogleFonts.amiri(fontSize: 44, fontWeight: FontWeight.w700, color: kCreamGold)),
+                  const SizedBox(height: 26),
+                  Opacity(
+                    opacity: title.value,
+                    child: Transform.translate(
+                      offset: Offset(0, 22 * (1 - title.value)),
+                      child: Text('القرآن الكريم',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.amiri(fontSize: 44, fontWeight: FontWeight.w700, color: kCreamGold)),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 6),
-                Opacity(
-                  opacity: sub.value,
-                  child: Text('اقرأ · استمع · احفظ',
-                      style: GoogleFonts.amiri(fontSize: 20, color: const Color(0xFFE9D9AE))),
-                ),
-              ]),
+                  Opacity(
+                    opacity: sub.value,
+                    child: Text('اقرأ · استمع · احفظ',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.amiri(fontSize: 20, color: const Color(0xFFE9D9AE))),
+                  ),
+                  const SizedBox(height: 22),
+                  // Fixed height so nothing moves while the ayah is typed.
+                  SizedBox(
+                    height: 110,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 22),
+                      child: Text.rich(
+                        TextSpan(children: [
+                          TextSpan(
+                            text: _letters.take(_typed).join(),
+                            style: quranStyle(23, const Color(0xFFFBF6E9)),
+                          ),
+                          if (_typed > 0 || _c.isCompleted)
+                            WidgetSpan(
+                              alignment: PlaceholderAlignment.middle,
+                              child: Opacity(
+                                opacity: _cursorOn ? 1 : 0,
+                                child: Container(
+                                  width: 2,
+                                  height: 26,
+                                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                                  color: kGoldLight,
+                                ),
+                              ),
+                            ),
+                        ]),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 60),
+                ],
+              ),
             ),
             Positioned(
               left: 0,
               right: 0,
               bottom: 28,
               child: Opacity(
-                opacity: credit.value,
+                opacity: _credit.value,
                 child: const DeveloperCredit(color: kCreamGold, size: 26),
               ),
             ),
