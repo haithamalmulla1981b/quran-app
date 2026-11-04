@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:just_audio/just_audio.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'quran_data.dart';
@@ -73,13 +74,23 @@ class AudioController extends ChangeNotifier {
     return d;
   }
 
-  Future<AudioSource> _source(Directory dir, int s, int a) async {
+  /// Shown in the notification and on the lock screen.
+  MediaItem _tag(int surah, int? ayah) => MediaItem(
+        id: '${reciter.id}/$surah/${ayah ?? 0}',
+        title: ayah == null
+            ? 'سورة ${surahNameAr(surah)} · البسملة'
+            : 'سورة ${surahNameAr(surah)} · آية ${arNum(ayah)}',
+        album: 'القرآن الكريم',
+        artist: reciter.nameAr,
+      );
+
+  Future<AudioSource> _source(Directory dir, int s, int a, MediaItem tag) async {
     final f = File('${dir.path}/${fileName(s, a)}');
     if (await f.exists() && await f.length() > 0) {
-      return AudioSource.file(f.path);
+      return AudioSource.file(f.path, tag: tag);
     }
     // Streams now and writes the file to the cache when fully received.
-    return LockCachingAudioSource(_url(s, a), cacheFile: f);
+    return LockCachingAudioSource(_url(s, a), cacheFile: f, tag: tag);
   }
 
   Future<void> setReciter(Reciter r) async {
@@ -106,9 +117,9 @@ class AudioController extends ChangeNotifier {
       final dir = await _dir();
       final children = <AudioSource>[];
       _hasBasmala = s != 1 && s != 9;
-      if (_hasBasmala) children.add(await _source(dir, 1, 1));
+      if (_hasBasmala) children.add(await _source(dir, 1, 1, _tag(s, null)));
       for (var a = 1; a <= ayahCount(s); a++) {
-        children.add(await _source(dir, s, a));
+        children.add(await _source(dir, s, a, _tag(s, a)));
       }
       final start = _hasBasmala ? (fromAyah <= 1 ? 0 : fromAyah) : fromAyah - 1;
       await player.setAudioSource(

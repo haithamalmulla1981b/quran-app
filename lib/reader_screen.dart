@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter/services.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
@@ -39,7 +40,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
     for (var a = 1; a <= _view.ayahs.length; a++) {
       cur.add(a);
       len += _view.ayahs[a - 1].length;
-      if (len >= 420) {
+      if (len >= 260) {
         out.add(cur);
         cur = <int>[];
         len = 0;
@@ -88,19 +89,35 @@ class _ReaderScreenState extends State<ReaderScreen> {
     super.dispose();
   }
 
-  /// Keeps the ayah being recited on screen.
+  DateTime _userScrolledAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// Keeps the ayah being recited on screen. Scrolls only when it has left
+  /// the visible area, and never while the reader is scrolling by hand.
   void _followAudio() {
     final a = app.audio;
     if (a.surah != s || a.currentAyah == null || a.currentAyah == _followed) return;
     _followed = a.currentAyah;
-    if (_scroll.isAttached) {
-      _scroll.scrollTo(
-        index: _indexOf(a.currentAyah!), // index 0 is the surah header
-        duration: const Duration(milliseconds: 450),
-        curve: Curves.easeInOut,
-        alignment: 0.15,
-      );
+    if (!_scroll.isAttached) return;
+    if (DateTime.now().difference(_userScrolledAt) < const Duration(seconds: 5)) return;
+    final index = _indexOf(a.currentAyah!); // index 0 is the surah header
+    for (final p in _positions.itemPositions.value) {
+      if (p.index != index) continue;
+      // Already comfortably visible: leave the page still.
+      if (p.itemLeadingEdge >= 0 && p.itemLeadingEdge < 0.6 && (app.pageView || p.itemTrailingEdge <= 0.85)) {
+        return;
+      }
     }
+    _scroll.scrollTo(
+      index: index,
+      duration: const Duration(milliseconds: 600),
+      curve: Curves.easeOutCubic,
+      alignment: 0.08,
+    );
+  }
+
+  bool _onUserScroll(UserScrollNotification n) {
+    if (n.direction != ScrollDirection.idle) _userScrolledAt = DateTime.now();
+    return false;
   }
 
   /// Remembers the first visible ayah as "last read".
@@ -206,7 +223,9 @@ class _ReaderScreenState extends State<ReaderScreen> {
       ),
       body: ListenableBuilder(
         listenable: Listenable.merge([app, app.audio]),
-        builder: (context, _) => ScrollablePositionedList.builder(
+        builder: (context, _) => NotificationListener<UserScrollNotification>(
+          onNotification: _onUserScroll,
+          child: ScrollablePositionedList.builder(
           itemScrollController: _scroll,
           itemPositionsListener: _positions,
           initialScrollIndex: widget.initialAyah == null ? 0 : _indexOf(widget.initialAyah!),
@@ -216,6 +235,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
           itemBuilder: (context, i) => i == 0
               ? _header(context)
               : (app.pageView ? _paragraph(context, i - 1) : _ayah(context, i)),
+          ),
         ),
       ),
       bottomNavigationBar: PlayerBar(surah: s, full: true),

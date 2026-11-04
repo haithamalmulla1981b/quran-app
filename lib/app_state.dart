@@ -28,6 +28,7 @@ class AppState extends ChangeNotifier {
     for (final r in kReciters) {
       if (r.id == rid) audio.reciter = r;
     }
+    notifyListeners();
   }
 
   void toggleDark() {
