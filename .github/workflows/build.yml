@@ -30,21 +30,33 @@ jobs:
           if [ ! -d android ]; then
             flutter create --platforms=android --org com.hmalmulla --project-name quran_app .
             rm -rf test
-            python3 tool/patch_android.py
+            python3 tool/patch_android.py 2>&1 | tee patch.log || { while IFS= read -r l; do echo "::error::$l"; done < patch.log; exit 1; }
           fi
 
       - run: flutter pub get
-      - run: flutter build apk --release
+      - name: Build APK and app bundle
+        run: |
+          set -o pipefail
+          (flutter build apk --release && flutter build appbundle --release) 2>&1 | tee build.log
+
+      - name: Report errors
+        if: failure()
+        run: |
+          grep -E "error|Error|FAILED|What went wrong|pattern not found|Exception" build.log 2>/dev/null | head -50 | while IFS= read -r l; do echo "::error::${l:0:900}"; done || true
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: quran-app-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: |
+            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/bundle/release/app-release.aab
 
       - name: Publish APK as a release (easy download on phone)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
           name: Build ${{ github.run_number }}
-          files: build/app/outputs/flutter-apk/app-release.apk
+          files: |
+            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/bundle/release/app-release.aab

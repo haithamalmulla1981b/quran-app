@@ -79,4 +79,20 @@ open(f'{RES}/values/ic_launcher_background.xml', 'w').write(
     '<?xml version="1.0" encoding="utf-8"?>\n'
     '<resources><color name="ic_launcher_background">#FBF6E9</color></resources>\n')
 
+# ---- Google Play: target Android 16 (API 36) with build tools that support it
+def sub_file(path, pattern, repl, label):
+    t = open(path, encoding='utf-8').read()
+    n = re.subn(pattern, repl, t)
+    if n[1] == 0:
+        sys.exit(f'{label}: pattern not found in {path}\n' + t[:1500])
+    open(path, 'w', encoding='utf-8').write(n[0])
+
+settings = next(f for f in ['android/settings.gradle', 'android/settings.gradle.kts'] if os.path.exists(f))
+sub_file(settings, r'(id\s*\(?\s*"com\.android\.application"\s*\)?\s*version\s*)"[^"]+"', r'\g<1>"8.11.1"', 'AGP version')
+sub_file(settings, r'(id\s*\(?\s*"org\.jetbrains\.kotlin\.android"\s*\)?\s*version\s*)"[^"]+"', r'\g<1>"2.1.0"', 'Kotlin version')
+sub_file('android/gradle/wrapper/gradle-wrapper.properties', r'gradle-[0-9.]+-(all|bin)\.zip', 'gradle-8.14.3-all.zip', 'Gradle wrapper')
+appg = next(f for f in ['android/app/build.gradle', 'android/app/build.gradle.kts'] if os.path.exists(f))
+sub_file(appg, r'compileSdk\s*=\s*flutter\.compileSdkVersion', 'compileSdk = 36', 'compileSdk')
+sub_file(appg, r'targetSdk\s*=\s*flutter\.targetSdkVersion', 'targetSdk = 36', 'targetSdk')
+
 print('Android project patched:', acts[0])
